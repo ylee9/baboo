@@ -31,11 +31,8 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     description="A python package for doing fast neutron star inference using kalman filtering. Named after a cat.",
-    entry_points={
-        'console_scripts': [
-            'baboo=baboo.cli:main',
-        ],
-    },
+    scripts = ['baboo/baboo_simulate_toas_onecomp_from_par_tim.py'],
+
     install_requires=requirements,
     license="GNU General Public License v3",
     long_description=readme + '\n\n' + history,
