@@ -344,14 +344,125 @@ class SecondSpindownModel(KalmanFilterTimeVarying):
 
     def update_Q(self, Q1, Q2, dts):
         Qs = np.zeros((2, 2, dts.size))
-        Qs[0, 0, :] = (Q1**2)*dts+(Q2**2)*dts**3/3
-        Qs[1, 1, :] = (Q2**2)*dts
-        Qs[0, 1, :] = ((Q2*dts)**2)/2
-        Qs[1, 0, :] = ((Q2*dts)**2)/2
+        Qs[0, 0, :] = Q1*dts+Q2*dts**3/3
+        Qs[1, 1, :] = Q2*dts
+        Qs[0, 1, :] = (Q2*dts**2)/2
+        Qs[1, 0, :] = (Q2*dts**2)/2
         self.Q = Qs
 
     def update_torques(self, N, dts):
         torques = np.zeros((2, dts.size))
+        torques[0, :] = N*dts**2 / 2
+        torques[1, :] = N*dts
+        self.B = torques
+
+class SecondSpindownModelGeneralNoise(KalmanFilterTimeVarying):
+    """
+    note that param map function can't contain dependence on dt
+    for this model.
+    """
+    def __init__(self, endog, measurement_cov=None,
+                 design=None, times=None, Q=None,
+                 transition=None, B=None, solve=True, params=None):
+        super(SecondSpindownModelGeneralNoise, self).__init__(transition, design, Q, measurement_cov, B, solve)
+        if times is None:
+            raise ValueError("must specify variable dt")
+        self.times = times
+        self.data = endog
+        self.nobs = self.times.size
+        self.solve = solve
+        self._R = self.R.copy()
+        if params is None:
+            self.params = {'Qgamma': None, 'N2': None, 'beta': None, 'delta': None, 'sigma': None, 'EFAC': None, 'EQUAD': None}
+        else:
+            self.params = params
+
+
+    @property
+    def transformed_params(self):
+        return self.params['Qgamma'],self.params['N2'],self.params['beta'],self.params['delta'], self.params['sigma'], self.params['EFAC'], self.params['EQUAD']
+
+    def update_parameters(self, params):
+        """
+        update transition matrix, etc.
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # update parameters
+        self.params = params.copy()
+        # get transformed version
+        Qgamma, N2, beta, delta, sigma, EFAC, EQUAD = self.transformed_params
+        dts = self.times[1:] - self.times[:-1]
+        dts = np.append(1, dts)
+        # construct transitions, etc.
+        self.update_transition(beta, delta, sigma, dts)
+        self.update_Q(Qgamma, dts)
+        self.update_torques(N2, dts)
+        self.R = self._R * EFAC + EQUAD
+
+    # make loglike more like statsmodel
+    def loglike(self, params, loglikelihood_burn=1, return_states=False):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewhat reasonable starting point for
+        # initial state. I don't think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+        Qgamma, N2, beta, delta, sigma, EFAC, EQUAD = self.transformed_params
+        # Q1, Q2, N2, EFAC, EQUAD = self.transformed_params
+        if isinstance(params, dict):
+            omg0 = params['omg0']
+            omgdot0 = params['omgdot0']
+        elif isinstance(params, np.ndarray):
+            omg0 = self.data[0,0]
+        return self.ll_on_data(self.data, params, x0=np.array([omg0, omgdot0, 0]),
+                               P0=np.eye(self.nstates) * np.max(self.R.flatten())*1e5,
+                               burn=loglikelihood_burn,
+                               return_states=return_states)
+    def smooth(self, params):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewhat reasonable starting point for
+        # initial state. I don't think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+        Q1, Q2, N2, EFAC, EQUAD = self.transformed_params
+        if isinstance(params, dict):
+            omg0 = params['omg0']
+            omgdot0 = params['omgdot0']
+        elif isinstance(params, np.ndarray):
+            omg0 = self.data[0,0]
+        return self.run_smoother(self.data, params, x0=np.array([omg0, omgdot0]),
+                               P0=np.eye(self.nstates) * np.max(self.R.flatten())*1e5,
+                               )
+
+
+    def update_transition(self, beta, delta, sigma, dts):
+        #TODO Andrés update
+        transition = np.zeros((3, 3, dts.size))
+        transition[0, 0, :] = 1
+        transition[1, 1, :] = 1
+        transition[0, 1, :] = dts
+        transition[0, 2, :] = (beta*sigma + np.exp(-dts*sigma)*(delta-beta*sigma)-delta*(1-dts*sigma))/sigma**2
+        transition[1, 2, :] = delta *(np.exp(-dts*sigma)-1)
+        transition[2, 2, :] = np.exp(-dts*sigma)
+        self.transition = transition
+
+    def update_Q(self, Qgamma, dts):
+        Qs = np.zeros((3, 3, dts.size))
+        Qs[2, 2, :] = (Qgamma)*dts
+        self.Q = Qs
+
+    def update_torques(self, N, dts):
+        torques = np.zeros((3, dts.size))
         torques[0, :] = N*dts**2 / 2
         torques[1, :] = N*dts
         self.B = torques

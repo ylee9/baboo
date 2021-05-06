@@ -47,7 +47,10 @@ class SimulationModel(object):
         previous_time = toa_fracs[0]
         toa_counter = 0
         states_vs_time[:, 0] = p0[1:]
-        p0[0] = 0 # must be zero at starting time because phase is zero here.
+        print(states_vs_time[:, 0])
+        print(tstarts)
+        p0[0] = 0. # must be zero at starting time because phase is zero here.
+        print(p0)
         for next_tstart,terr in tqdm(zip(tstarts[1:], toa_errors[1:]), total=tstarts.size - 1):
             # start at last tao
             # move to observing time
@@ -67,6 +70,7 @@ class SimulationModel(object):
                     p0 = states[-1, :]
                     # wrap phase
                     # raise ValueError('junk')
+                    # print(p0)
                     p0[0] = p0[0] - np.floor(p0[0])
             else:
                 print('toas are close')
@@ -101,7 +105,7 @@ class SimulationModel(object):
         return toas, toa_errors, states_vs_time
 
     def integrate_and_return_frequencies(self, tstarts, F0, F1, PEPOCH, toa_errors=None, p0=None, Ntoas_per_fit=3):
-        from utils import fit_toas_to_get_frequencies
+        from .utils import fit_toas_to_get_frequencies
         toas, toa_errors, states = self.integrate(tstarts, toa_errors=toa_errors, p0=p0)
         freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas,
                 toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit)

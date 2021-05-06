@@ -24,3 +24,23 @@ def two_component_fake_data(times, Omgc_start=100,
     data[:, 0] += np.random.randn(times.size) * np.sqrt(R_c)
     data[:, 1] += np.random.randn(times.size) * np.sqrt(R_s)
     return data
+
+def freq_fake_data(times,Ndot,
+                   f0,fdot0,
+                   xi_f, xi_fdot,
+                   R):
+    """""
+    Parameters:
+    -----------
+    """""
+    #Functions for sdeint
+    F_int=np.array([[0,1],[0,0]])
+    def f(x,t):
+        return F_int.dot(x)+np.array([0,Ndot])
+    def g(x,t):
+        return np.diag([xi_f,xi_fdot])
+    states=sdeint.itoint(f,g,np.array([f0,fdot0]),times)
+    data=states.copy()
+    data[:,0] += np.random.randn(times.size)*np.sqrt(R)
+    data[:,1] += np.random.randn(times.size)*np.sqrt(R)
+    return data
