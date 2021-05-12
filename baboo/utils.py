@@ -65,4 +65,4 @@ def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=
         F1s_fit.append(psr['F1'].val)
         F1s_errs_fit.append(psr['F1'].err)
         times_fit.append(PEPOCH_tmp)
-    return freqs_fit, freqs_errs_fit, times_fit
+    return np.array(freqs_fit), np.array(freqs_errs_fit), np.array(times_fit)
