@@ -16,7 +16,7 @@ class SimulationModel(object):
     def variance(self):
         pass
 
-    def integrate(self, tstarts, toa_errors=None, p0=None):
+    def integrate(self, tstarts, toa_errors=None, p0=None, nphase_states=1):
         """
         tstarts : `numpy.ndarray`
             list of MJD times
@@ -37,20 +37,19 @@ class SimulationModel(object):
         tstarts = np.round((tstarts - tstarts[0]) * 86400)
         # reset to zero for integration
         # track states that are not the phase
-        states_vs_time = np.zeros((np.size(p0) - 1, tstarts.size))
+        states_vs_time = np.zeros((np.size(p0) - nphase_states, tstarts.size))
 
         # set up preliminaries
         prev_tstart = 0
-        toa_fracs = [np.random.randn()*toa_errors[0]]
+        toa_fracs = [0]
         toa_ints = [0]
         # p0 = np.asarray([phi0, omgc0, omgs0])
         previous_time = toa_fracs[0]
         toa_counter = 0
-        states_vs_time[:, 0] = p0[1:]
-        print(states_vs_time[:, 0])
-        print(tstarts)
-        p0[0] = 0. # must be zero at starting time because phase is zero here.
-        print(p0)
+        states_vs_time[:, 0] = p0[nphase_states:]
+        for ii in range(nphase_states):
+            p0[ii] = 0. # must be zero at starting time because phase is zero here.
+        p0 = np.longdouble(p0)
         for next_tstart,terr in tqdm(zip(tstarts[1:], toa_errors[1:]), total=tstarts.size - 1):
             # start at last tao
             # move to observing time
@@ -65,13 +64,14 @@ class SimulationModel(object):
                         # add at most 10 seconds
                         times = np.linspace(times[-1], times[-1] + min(self.skipsize, next_tstart - times[-1]), num=3)
                     counter += 1
-                    states = sdeint.itoint(self.expectation, self.variance, p0, times)
+                    states = sdeint.itoint(self.expectation, self.variance, np.longdouble(p0), np.longdouble(times))
                     # reset start points
                     p0 = states[-1, :]
                     # wrap phase
                     # raise ValueError('junk')
                     # print(p0)
-                    p0[0] = p0[0] - np.floor(p0[0])
+                    for ii in range(nphase_states):
+                        p0[ii] = p0[ii] - np.floor(p0[ii])
             else:
                 print('toas are close')
             previous_time = np.longdouble(times[-1])
@@ -85,12 +85,12 @@ class SimulationModel(object):
             # get states at time of TOA
             states_toa = sdeint.itoint(self.expectation, self.variance, p0, newtimes)
             # set TOA
-            toa = previous_time + xtra_time + np.random.randn()*terr
+            toa = previous_time + xtra_time # + np.random.randn()*terr
             toa_fracs.append(toa - np.trunc(toa))
             toa_ints.append(np.trunc(toa))
 
             # track other states
-            states_vs_time[:, toa_counter + 1] = states_toa[-1, 1:]
+            states_vs_time[:, toa_counter + 1] = states_toa[-1, nphase_states:]
             prev_tstart = next_tstart
             toa_counter += 1
         toa_ints = np.asarray(toa_ints)
@@ -98,15 +98,18 @@ class SimulationModel(object):
         toa_start = toa_ints[0]
         toa_ints -= toa_start
 
+        toa_fracs += np.random.randn(toa_fracs.size) * toa_errors
         # change back to MJD
         toas = np.longdouble(toa_ints / 86400) + np.longdouble(toa_fracs / 86400)
         # set start time
         toas += pets0
         return toas, toa_errors, states_vs_time
 
-    def integrate_and_return_frequencies(self, tstarts, F0, F1, PEPOCH, toa_errors=None, p0=None, Ntoas_per_fit=3):
+    def integrate_and_return_frequencies(self, tstarts, F0, F1, PEPOCH,
+            toa_errors=None, p0=None, Ntoas_per_fit=3, nphase_states=1):
         from .utils import fit_toas_to_get_frequencies
-        toas, toa_errors, states = self.integrate(tstarts, toa_errors=toa_errors, p0=p0)
+        toas, toa_errors, states = self.integrate(tstarts,
+                toa_errors=toa_errors, p0=p0, nphase_states=nphase_states)
         freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas,
                 toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit)
         return toas, toa_errors, times_fit, freqs, freqs_errs, states
@@ -124,7 +127,7 @@ class TwoComponentModelSim(SimulationModel):
         self.lag = lag
         self.Qc = Qc
         self.Qs = Qs
-        self.skipsize=1000
+        self.skipsize=skipsize
 
         def param_map(A, B, C, D):
             """
@@ -142,9 +145,15 @@ class TwoComponentModelSim(SimulationModel):
 
         # set up matrices
         # states are [crust phase, crust frequency, superfluid frequency]
-        self.F = np.array([[0, 1, 0], [0, -1/tauc, 1/tauc], [0, 1/taus, -1/taus]])
-        self.N = np.array([0, Nc, Ns])
-        self.Q = np.diag([0,  np.sqrt(self.Qc), np.sqrt(self.Qs)])
+        self.F = np.longdouble(np.array([[0., 1., 0.], [0., -1./tauc, 1./tauc],
+            [0., 1./taus, -1./taus]]))
+        self.N = np.longdouble(np.array([0., Nc, Ns]))
+        self.Q = np.longdouble(np.diag([0., np.sqrt(self.Qc),
+            np.sqrt(self.Qs)]))
+
+        # self.F = np.array([[0., 0., 1., 0.], [0., 0., 0., 1.], [0., 0., -1./tauc, 1./tauc], [0., 0., 1./taus, -1./taus]])
+        # self.N = np.array([0., 0., Nc, Ns])
+        # self.Q = np.diag([0.,0.,  np.sqrt(self.Qc), np.sqrt(self.Qs)])
 
     def expectation(self, x, t):
         return self.F @ x + self.N
@@ -153,7 +162,7 @@ class TwoComponentModelSim(SimulationModel):
         return self.Q
 
     def __call__(self, times, p0, toa_errors=None):
-        return self.integrate(times, p0=p0, toa_errors=toa_errors)
+        return self.integrate(times, p0=p0, toa_errors=toa_errors, nphase_states=1)
 
 class OneComponentModelSim(SimulationModel):
     """One component model simulation"""
