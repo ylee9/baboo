@@ -178,7 +178,6 @@ class OneComponentModel(KalmanFilterTimeVaryingOneState):
 
     @property
     def keylist(self):
-        # return ['sigma2', 'torque', 'omgc0', 'EFAC', 'EQUAD']
         return ['sigma2', 'torque', 'omgc_0', 'EFAC', 'EQUAD']
 
     def _check_params(self, params):
@@ -240,6 +239,7 @@ class OneComponentModel(KalmanFilterTimeVaryingOneState):
             omgc_0 = params['omgc_0']
         elif isinstance(params, list):
             omgc_0 = params[-1]
+        # print(Q, N, EFAC, EQUAD, omgc_0)
         x = self.ll_on_data(self.data, params, x0=np.array([omgc_0]),
                             P0=np.eye(self.nstates) * np.max(self.R)*1e1,
                             burn=loglikelihood_burn,
