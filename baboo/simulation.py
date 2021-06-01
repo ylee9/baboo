@@ -4,6 +4,54 @@ import logging
 import numpy as np
 from tqdm import tqdm
 
+def two_component_fake_data(times, Omgc_start=100,
+                            xi_c=1e-11, xi_s=1e-11,
+                            N_c=1e-11, N_s=-1e-11,
+                            tau_c=1e6, tau_s=3e6,
+                            R_c=1e-12, R_s=1e-12):
+    """
+    Parameters:
+    -----------
+    """
+    tau = (tau_c * tau_s) / (tau_c + tau_s)
+    # get start for omega_s
+    Omgs_start = Omgc_start - (N_c - N_s) * tau
+    # define helper functions for sdeint
+    F_int = np.longdouble(np.array([[-1/tau_c, 1/tau_c],[1/tau_s, -1/tau_s]]))
+    N = np.longdouble(np.array([N_c, N_s]))
+    xi = np.longdouble(np.diag([xi_c, xi_s]))
+    def f(x, t):
+        return F_int.dot(x) + N
+    def g(x, t):
+        return xi
+    states = sdeint.itoint(f, g, np.array([Omgc_start, Omgs_start]), times)
+    data = states.copy()
+    data[:, 0] += np.random.randn(times.size) * np.sqrt(R_c)
+    data[:, 1] += np.random.randn(times.size) * np.sqrt(R_s)
+    return data
+
+def freq_fake_data(times,Ndot,
+                   f0,fdot0,
+                   xi_f, xi_fdot,
+                   R):
+    """""
+    Parameters:
+    -----------
+    """""
+    #Functions for sdeint
+    F_int = np.longdouble(np.array([[0,1],[0,0]]))
+    N = np.longdouble(np.array([0,Ndot]))
+    xi = np.longdouble(np.diag([xi_f,xi_fdot]))
+    def f(x,t):
+        return F_int.dot(x) + N
+    def g(x,t):
+        return xi
+    states=sdeint.itoint(f,g,np.array([f0,fdot0]),times)
+    data=states.copy()
+    data[:,0] += np.random.randn(times.size)*np.sqrt(R)
+    data[:,1] += np.random.randn(times.size)*np.sqrt(R)
+    return data
+
 class SimulationModel(object):
     """base class for a model that we might want to simulate"""
     nstates = 0
@@ -110,8 +158,7 @@ class SimulationModel(object):
         from .utils import fit_toas_to_get_frequencies
         toas, toa_errors, states = self.integrate(tstarts,
                 toa_errors=toa_errors, p0=p0, nphase_states=nphase_states)
-        freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas,
-                toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit)
+        freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit)
         return toas, toa_errors, times_fit, freqs, freqs_errs, states
 
 
@@ -180,9 +227,9 @@ class OneComponentModelSim(SimulationModel):
 
         # set up matrices
         # states are [crust phase, crust frequency, superfluid frequency]
-        self.F = np.array([[0, 1, 0], [0, 0, 1], [0, 0, 0]])
-        self.N = np.array([0, 0, self.F2])
-        self.Q = np.diag([np.sqrt(Q_f), np.sqrt(Q_f1), np.sqrt(Q_f2)])
+        self.F = np.longdouble(np.array([[0, 1, 0], [0, 0, 1], [0, 0, 0]]))
+        self.N = np.longdouble(np.array([0, 0, self.F2]))
+        self.Q = np.longdouble(np.diag([np.sqrt(Q_f), np.sqrt(Q_f1), np.sqrt(Q_f2)]))
 
     def expectation(self, x, t):
         return self.F @ x + self.N
