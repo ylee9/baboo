@@ -10,8 +10,32 @@ def two_component_fake_data(times, Omgc_start=100,
                             tau_c=1e6, tau_s=3e6,
                             R_c=1e-12, R_s=1e-12):
     """
+    Simulate a list of time-ordered frequencies from the two
+    component neutron star model with simulated process and
+    measurement noise.
+
     Parameters:
     -----------
+    times : np.ndarray
+        list of times (in units of seconds)
+    Omgc_start : float
+        start frequency
+    xi_c : float
+        crust noise amplitude
+    xi_s : float
+        superfluid noise amplitude
+    N_c : float
+        crust torque
+    N_s : float
+        superfluid torque
+    tau_c : float
+        crust relaxation time
+    tau_s : float
+        superfluid relaxation time
+    R_c : float
+        measurement covariance for crust measurements.
+    R_s : float
+        measurement covariance for superfluid measurements.
     """
     tau = (tau_c * tau_s) / (tau_c + tau_s)
     # get start for omega_s

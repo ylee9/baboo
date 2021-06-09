@@ -16,8 +16,35 @@ import bilby
 
 class TwoComponentModel(KalmanFilterTimeVarying):
     """
-    note that param map function can't contain dependence on dt
-    for this model.
+    Two component model class. Usually you will initialize this
+    by specifying the measurements, times, measurement covariance,
+    and design matrix. The other parameters transition matrix,
+    torque matrix, and process noise covariance, depend on your specific
+    model, and can be supplied when calling specific methods, like smoothing,
+    or getting a likelihood.
+
+    Parameters:
+    -----------
+    endog : np.ndarray
+        measurements you have made. Ntimes x Nmeasurements.
+    measurement_cov : np.ndarray
+        covariance on measurements. Ntimes x Nmeasurements x Nmeasurements.
+    design : np.ndarray
+        Matrix linking states to measurements. Nmeasurements x Nstates
+    times : np.ndarray
+        Times at which measurements are made. Ntimes x 1
+    Q : np.ndarray [not usually initially supplied]
+        Process noise covariance matrix
+    transition : np.ndarray [not usually initially supplied]
+        Transition matrix
+    B :  np.ndarray [not usually initially supplied]
+        Torque matrix
+    solve : bool
+        State whether to explicitly caculate inverse matrices (False)
+        or solve linear equation using `np.solve` (True) when running
+        Kalman filter.
+    params : dict, [not usually supplied on instantiation]
+        parameters of the model
     """
     def __init__(self, endog, measurement_cov=None,
                  design=None, times=None,
