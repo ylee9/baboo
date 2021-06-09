@@ -46,9 +46,9 @@ mymodel = TwoComponentModelSim(r=3, tau=7.5e5, omgc_dot = -2.51e-12, lag=lag, Qc
 # time-ordered frequencies using `libstempo`. `p0` is the starting states
 # for the stochastic integrator. This depends on the model you are simulating.
 # For this model it is [crust_phase, crust freq, superfluid freq] all evaluated 
-# at the first entry of tstart. 
+# at the first entry of `tstart`. 
 # 
-# After it generates ToAs this code fits N_toas_per_fit at a time to generate
+# After it generates ToAs, this code fits N_toas_per_fit at a time to generate
 # a list of time-ordered frequencies
 # To do that, we need to tell it where to start for the fits,
 # which are the second, third, and fourth arguments.
@@ -63,7 +63,10 @@ mymodel = TwoComponentModelSim(r=3, tau=7.5e5, omgc_dot = -2.51e-12, lag=lag, Qc
 # fitting with `libstempo` is working properly and whether it is an accurate
 # representation of the true frequency at that time.
 
-toas, toa_errors, times_fit, freqs, freqs_errs, states = mymodel.integrate_and_return_frequencies(tstarts, p0[1], omgc_dot, tstarts[0], toa_errors=toa_errors, p0=p0, Ntoas_per_fit=3)
+toas, toa_errors, times_fit, freqs, freqs_errs, states = \
+    mymodel.integrate_and_return_frequencies(tstarts, p0[1], omgc_dot,
+                                             tstarts[0], toa_errors=toa_errors,
+                                             p0=p0, Ntoas_per_fit=3)
 ```
 
 At the moment, there are methods for simulating frequencies or ToAs for the two component, and for a much simpler one-component model. More documentation to come.
@@ -76,27 +79,28 @@ We can run a Kalman filter to track the frequencies of the crust and the superfl
 from baboo.models import TwoComponentModel
 
 
-# Sometimes `libstempo` outputs np.longdouble (float128) values
+# Sometimes `libstempo` outputs np.longdouble (float128) values,
 # but we want to use regular float64s.
-# we also want to reshape the array so it is a proper column vector
+# We also want to reshape the array so it is a proper column vector.
 freqs = np.array(freqs).astype(float).reshape((np.size(times_fit), 1))
 
-# the times that came out above for the frequencies are in MJD
+# The times that came out above for the frequencies are in MJD
 # not seconds. So convert them. Also convert to regular float.
-times_fit *= 86400
-times_fit = times_fit.astype(float)
+times_fit = 86400 * times_fit.astype(float)
 
-# design matrix relates measurements to hidden states
-# in this case we have measurements of crust, but not the superfluid
-# but we still want to track the superfluid with the Kalman filter.
-# so our design matrix is a 1x2 matrix
+# The design matrix relates the measurements to hidden states.
+# measurements = design_matrix @ state_variables.
+# In this case we have measurements of neutron star crust, 
+# but not the superfluid. However, we still want to track the superfluid
+# with the Kalman filter. So we have 1 set of measurements and 2 sets of states.
+# So our design matrix is a 1x2 matrix.
 design_matrix = np.array([1, 0]).reshape((1,2))
 
-# Covarinace matrix of measurements. In this case this comes from the errors
+# Covariance matrix of measurements. In this case this comes from the errors
 # of our fits above
-mycov = np.asarray([np.eye(1) * freq_err for freq_err in newerrs]).T
+mycov = np.asarray([np.eye(1) * freq_err for freq_err in freq_errs]).T
 
-# create a model object
+# Create a model object.
 two_component_model = TwoComponentModel(freqs, mycov,
                                         design_matrix, times_fit)
 
@@ -104,19 +108,19 @@ two_component_model = TwoComponentModel(freqs, mycov,
 params = {'relax_ratio': 3, 'reduced_relax': 7.5e5**-1,
           'lag': lag, 'omegac_dot': -2.51e-12, 'Qc': 1e-24,
           'Qs': 1e-24, 'EFAC': 1, 'EQUAD': 0}
-# run filtering through calculating the log likelihood
-# get back states. ll_total is the total log likelihood,
-# state estimates are the estimates of the crust and superfluid
-# frequencies at each time step
-# state_covariances are the covariance of those state estimates
-# and ll_per_measurement is the log-likelihood assocated with each individual
-# measurement.
+
+# Run filtering through calculating the log likelihood, but also 
+# requst to # get back states. ll_total is the total log likelihood,
+# state_estimates are the estimates of the crust and superfluid
+# frequencies at each time step state_covariances are the
+# covariance of those state estimates and ll_per_measurement is
+# the log-likelihood assocated with each individual measurement.
 ll_total, state_estimates, state_covariances, ll_per_measurement = two_component_model.loglike(params, return_states=True)
 
 # If you are more interested in the state estimates, as opposed to the likelihood
 # then for some models you can also run the `smooth` method, which runs a
 # forward-backward algorithm to get better state estimates.
-state_estimates, state_covariances = two_component_model.smooth(params).
+state_estimates, state_covariances = two_component_model.smooth(params)
 ```
 
 ## Sampling to find best model parameters give a set of data
