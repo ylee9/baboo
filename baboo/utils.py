@@ -57,12 +57,12 @@ def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=
         write_tim_file('tmp', toas[idxs], toa_errors[idxs])
         # load up and do fit
         PEPOCH_tmp = toas[idxs[int((Ntoas_per_fit-1)/2)]]
-        if ii == Ntoas_per_fit:
-            write_par('tmp', F0 + F1*(PEPOCH_tmp - PEPOCH)*86400, F1, PEPOCH_tmp)
-        else:
-            write_par('tmp', psr['F0'].val + psr['F1'].val*(PEPOCH_tmp -
-                psr['PEPOCH'].val)*86400, psr['F1'].val, PEPOCH_tmp,
-                F1err=psr['F1'].err, F0err=psr['F0'].err)
+        # if ii == Ntoas_per_fit:
+        write_par('tmp', F0 + F1*(PEPOCH_tmp - PEPOCH)*86400, F1, PEPOCH_tmp)
+        # else:
+        #     write_par('tmp', psr['F0'].val + psr['F1'].val*(PEPOCH_tmp -
+        #         psr['PEPOCH'].val)*86400, psr['F1'].val, PEPOCH_tmp,
+        #         F1err=psr['F1'].err, F0err=psr['F0'].err)
         psr = libstempo.tempopulsar(parfile='tmp.par', timfile='tmp.tim')
         psr.fit()
         freqs_fit.append(psr['F0'].val)
@@ -70,4 +70,4 @@ def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=
         F1s_fit.append(psr['F1'].val)
         F1s_errs_fit.append(psr['F1'].err)
         times_fit.append(PEPOCH_tmp)
-    return np.array(freqs_fit), np.array(freqs_errs_fit), np.array(times_fit)
+    return np.array(freqs_fit).astype(float), np.array(freqs_errs_fit).astype(float), np.array(times_fit).astype(float)

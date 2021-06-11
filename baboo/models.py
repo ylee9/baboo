@@ -135,6 +135,31 @@ class TwoComponentModel(KalmanFilterTimeVarying):
                                    return_states=return_states)
         except np.linalg.LinAlgError:
             return -np.inf
+
+    def smooth(self, params):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewhat reasonable starting point for
+        # initial state. I don't think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+        tauc, taus, Qc, Qs, Nc, Ns, EFAC, EQUAD = self.transformed_params
+        lag = (tauc * taus / (tauc + taus)) * (Nc - Ns)
+        if isinstance(params, dict):
+            omgc_0 = params['omgc_0']
+            omgs_0 = omgc_0 - lag
+        elif isinstance(params, np.ndarray):
+            omgc_0 = self.data[0,0]
+            omgs_0 = omgc_0 - lag
+        return self.smoother(self.data, params, x0=np.array([omgc_0, omgs_0]),
+                               P0=np.eye(self.nstates) * np.max(self.R[:, :, 0])*1e5,
+                               )
+
+
     def update_Q(self, tauc, taus, Qc, Qs, dts):
         tauc = np.real(tauc)
         taus = np.real(taus)
@@ -272,6 +297,28 @@ class OneComponentModel(KalmanFilterTimeVaryingOneState):
                             burn=loglikelihood_burn,
                             return_states=return_states)
         return x
+    def smooth(self, params):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewhat reasonable starting point for
+        # initial state. I don't think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+
+        Q, N, EFAC, EQUAD = params
+        if isinstance(params, dict):
+            omgc_0 = params['omgc_0']
+        elif isinstance(params, list):
+            omgc_0 = params[-1]
+        return self.run_smoother(self.data, params, x0=np.array([omgc_0]),
+                               P0=np.eye(self.nstates) * np.max(self.R.flatten())*1e5,
+                               )
+
+
 
 class SecondSpindownModel(KalmanFilterTimeVarying):
     """
