@@ -38,7 +38,8 @@ def write_par(parfile, F0, F1, PEPOCH, F1err=1e-13, F0err=1e-7, fit_omgdot=True)
         print(f"{'PEPOCH':15}{PEPOCH}", file=myf)
         print("TRACK -2", file=myf)
 
-def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=3):
+def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH,
+        Ntoas_per_fit=3, tmpdir='./'):
     """
     Fit TOAs to get frequencies.
     """
@@ -54,6 +55,40 @@ def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=
     for ii in tqdm(range(Ntoas_per_fit, toas.size)):
         idxs = np.arange(ii-Ntoas_per_fit, ii)
         # write small tim file
+        write_tim_file(tmpdir + '/tmp', toas[idxs], toa_errors[idxs])
+        # load up and do fit
+        PEPOCH_tmp = toas[idxs[int((Ntoas_per_fit-1)/2)]]
+        # if ii == Ntoas_per_fit:
+        write_par(tmpdir + '/tmp', F0 + F1*(PEPOCH_tmp - PEPOCH)*86400, F1, PEPOCH_tmp)
+        # else:
+        #     write_par('tmp', psr['F0'].val + psr['F1'].val*(PEPOCH_tmp -
+        #         psr['PEPOCH'].val)*86400, psr['F1'].val, PEPOCH_tmp,
+        #         F1err=psr['F1'].err, F0err=psr['F0'].err)
+        psr = libstempo.tempopulsar(parfile=tmpdir+'/tmp.par', timfile=tmpdir+'/tmp.tim')
+        psr.fit()
+        freqs_fit.append(psr['F0'].val)
+        freqs_errs_fit.append(psr['F0'].err)
+        F1s_fit.append(psr['F1'].val)
+        F1s_errs_fit.append(psr['F1'].err)
+        times_fit.append(PEPOCH_tmp)
+    return np.array(freqs_fit).astype(float), np.array(freqs_errs_fit).astype(float), np.array(times_fit).astype(float)
+def fit_toas_to_get_F0_F1(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=3):
+    """
+    Fit TOAs to get frequencies.
+    """
+    # do import here so that it doesn't necessarily
+    # break things for people
+    # unless they try to run this function.
+    import libstempo
+    freqs_fit = []
+    freqs_errs_fit = []
+    F1s_fit = []
+    F1s_errs_fit = []
+    times_fit = []
+    cov = []
+    for ii in tqdm(range(Ntoas_per_fit, toas.size)):
+        idxs = np.arange(ii-Ntoas_per_fit, ii)
+        # write small tim file
         write_tim_file('tmp', toas[idxs], toa_errors[idxs])
         # load up and do fit
         PEPOCH_tmp = toas[idxs[int((Ntoas_per_fit-1)/2)]]
@@ -64,10 +99,16 @@ def fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=
         #         psr['PEPOCH'].val)*86400, psr['F1'].val, PEPOCH_tmp,
         #         F1err=psr['F1'].err, F0err=psr['F0'].err)
         psr = libstempo.tempopulsar(parfile='tmp.par', timfile='tmp.tim')
-        psr.fit()
+        out = psr.fit()
         freqs_fit.append(psr['F0'].val)
         freqs_errs_fit.append(psr['F0'].err)
         F1s_fit.append(psr['F1'].val)
         F1s_errs_fit.append(psr['F1'].err)
         times_fit.append(PEPOCH_tmp)
-    return np.array(freqs_fit).astype(float), np.array(freqs_errs_fit).astype(float), np.array(times_fit).astype(float)
+        cov.append(out[2][1:3, 1:3])
+    output_vals = np.c_[np.array(freqs_fit), np.array(F1s_fit)]
+    output_errs = np.c_[np.array(freqs_errs_fit), np.array(F1s_errs_fit)]
+    cov = np.array(cov)
+
+    return np.array(times_fit).astype(float), output_vals.astype(float), output_errs.astype(float), cov.astype(float)
+

@@ -178,3 +178,46 @@ class KalmanLikelihood(bilby.Likelihood):
 #         print(ll)
         return ll
 
+class KalmanLikelihoodMeanReversion(bilby.Likelihood):
+    """
+    Likelihood class for Bilby.
+
+    In this case the `params` that are going to be passed around
+    are exclusively dictionaries and are synonymous with the parameters
+    in bilby.
+
+    The parameters in the `param_map` function for the
+    `neutron_star_model` used here *must* match the parameters passed as a
+    keyword argument (or must match the default parameters shown in the
+    __init__ script.
+    """
+
+    def __init__(self, neutron_star_model, parameters=None, x0=None):
+        """
+        Provides likelihood class for bilby. Must supply a maximum likelihood
+        model (i.e. one of the
+        """
+        if parameters is None:
+            parameters={'sigma_v': None, 'sigma_a':None, 'N': None,'abar':None,
+                    'gamma_v':None, 'gamma_a':None, 'fdot_start': None,
+                    'fddot_start': None,
+                    'EFAC':None, 'EQUAD':None}
+        super().__init__(parameters=parameters)
+        self.neutron_star_model = neutron_star_model
+        self.x0 = x0
+
+    def log_likelihood(self):
+        try:
+            ll = self.neutron_star_model.loglike(self.parameters,
+                    loglikelihood_burn=1)
+        # if we can't run the kalman filter
+        # these parameters are not right...
+        except np.linalg.LinAlgError:
+            ll= -np.inf
+        # check if it's a nan.
+        # if so don't use these parameters
+        if np.isnan(ll):
+            ll = -np.inf
+        return ll
+
+

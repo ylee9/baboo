@@ -4,6 +4,59 @@ import logging
 import numpy as np
 from tqdm import tqdm
 
+def mean_reverting_velocity_acceration_model(times, v_start, a_start,
+        gamma_v, gamma_a, N, abar, sigma_v, sigma_a,
+        R=1e-12):
+    """
+    mean reverting model:
+        v -- frequency
+        a - frequency derivative
+
+        dv/dt = -gamma_v * v + gamma_v * N + a + xi_v
+        da/dt = -gamma_a * a + gamma_a * abar + xi_a
+
+        where xi's are white noise processes
+        <xi_v(t) xi_v(t')>  = sigma_v^2 delta(t-t')
+        <xi_a(t) xi_a(t')>  = sigma_a^2 delta(t-t')
+        <xi_v(t) xi_a(t')> = 0
+    Parameters:
+    -----------
+    times : numpy.ndarray
+        times (in seconds) at which to evaluate integrator. Must be equally
+        spaced.
+    v_start : float
+        start frequency at times[0]
+    a_start : float
+        start frequency derivative at times[0]
+    N : float
+        torque-like term applied to frequency
+    abar : float
+        long term frequency derivative
+    sigma_v : float
+        amplitude of white noise torques applied to frequency
+    sigma_a : float
+        amplitude of white noise torques applied to frequency derivative
+    R : float
+        measurement covariance [for adding measurement noise]
+
+    Returns:
+    --------
+    data : numpy.ndarray
+        list of frequencies evaluated at input times with measurement noise.
+    """
+    F = np.longdouble(np.array([[-gamma_v, 1], [0, -gamma_a]]))
+    N = np.longdoube(np.array([gamma_v*N, gamma_a*abar]))
+    Sigma = np.longdouble(np.diag([sigma_v, sigma_a]))
+    def f(x, t):
+        return F_int.dot(x) + N
+    def g(x, t):
+        return xi
+    states = sdeint.itoint(f, g, np.array([v_start, a_start]), times)
+    data = states.copy()
+    data[:, 0] += np.random.randn(times.size) * np.sqrt(R_c)
+    return data[:, 0]
+
+
 def two_component_fake_data(times, Omgc_start=100,
                             xi_c=1e-11, xi_s=1e-11,
                             N_c=1e-11, N_s=-1e-11,
@@ -178,11 +231,14 @@ class SimulationModel(object):
         return toas, toa_errors, states_vs_time
 
     def integrate_and_return_frequencies(self, tstarts, F0, F1, PEPOCH,
-            toa_errors=None, p0=None, Ntoas_per_fit=3, nphase_states=1):
+            toa_errors=None, p0=None, Ntoas_per_fit=3, nphase_states=1,
+            tmpdir='./'):
         from .utils import fit_toas_to_get_frequencies
         toas, toa_errors, states = self.integrate(tstarts,
                 toa_errors=toa_errors, p0=p0, nphase_states=nphase_states)
-        freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas, toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit)
+        freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas,
+                toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit,
+                tmpdir=tmpdir)
         return toas, toa_errors, times_fit, freqs, freqs_errs, states
 
 
