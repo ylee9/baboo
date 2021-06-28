@@ -330,23 +330,34 @@ class OneComponentModelSim(SimulationModel):
 
 
 class MeanRevertingModelSim(SimulationModel):
-    """docstring for TwoComponentModel"""
+    """
+    d(phi)/dt = F0
+    d(F0)/dt = v
+    dv/dt = -gamma_v * v + gamma_v * Nv + a
+    da/dt = -gamma_a * a + gamma_a * abar
+
+    this gets translated in to F and N below
+    We have put white noise in dv/dt and da/dt with
+    white noise amplitudes sigma_a, sigma_v
+    """
+
     nstates = 3
-    def __init__(self, gamma_v, gamma_a, sigma_a, sigma_v, N, abar, skipsize=1000):
+    def __init__(self, gamma_v, gamma_a, sigma_a, sigma_v, Nv, abar, skipsize=1000):
         super(MeanRevertingModelSim, self).__init__()
         self.gamma_v = gamma_v
         self.gamma_a = gamma_a
         self.sigma_v = sigma_v
         self.sigma_a = sigma_a
-        self.N = N
+        self.Nv = Nv
         self.abar = abar
 
         self.skipsize=skipsize
         # set up matrices
-        # states are [crust phase, crust frequency, superfluid frequency]
+        # states are [phase, frequency, fdot, fddot]
+        # also written as [phi, F0, v, a]
         self.F = np.longdouble(np.array([[0., 1., 0., 0.], [0., 0., 1., 0],
             [0, 0, -self.gamma_v, 1], [0, 0, 0, -self.gamma_a]]))
-        self.N = np.longdouble(np.array([0., 0., self.gamma_v*self.N, self.gamma_a*self.abar]))
+        self.N = np.longdouble(np.array([0., 0., self.gamma_v*self.Nv, self.gamma_a*self.abar]))
         self.Q = np.longdouble(np.diag([0., 0., self.sigma_v, self.sigma_a]))
 
     def expectation(self, x, t):
