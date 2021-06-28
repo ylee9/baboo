@@ -327,3 +327,35 @@ class OneComponentModelSim(SimulationModel):
             Errors on output TOAs to give. Default = 1e-6 seconds.
         """
         return self.integrate(times, p0=p0, toa_errors=toa_errors)
+
+
+class MeanRevertingModelSim(SimulationModel):
+    """docstring for TwoComponentModel"""
+    nstates = 3
+    def __init__(self, gamma_v, gamma_a, sigma_a, sigma_v, N, abar, skipsize=1000):
+        super(MeanRevertingModelSim, self).__init__()
+        self.gamma_v = gamma_v
+        self.gamma_a = gamma_a
+        self.sigma_v = sigma_v
+        self.sigma_a = sigma_a
+        self.N = N
+        self.abar = abar
+
+        self.skipsize=skipsize
+        # set up matrices
+        # states are [crust phase, crust frequency, superfluid frequency]
+        self.F = np.longdouble(np.array([[0., 1., 0., 0.], [0., 0., 1., 0],
+            [0, 0, -self.gamma_v, 1], [0, 0, 0, -self.gamma_a]]))
+        self.N = np.longdouble(np.array([0., 0., self.gamma_v*self.N, self.gamma_a*self.abar]))
+        self.Q = np.longdouble(np.diag([0., 0., self.sigma_v, self.sigma_a]))
+
+    def expectation(self, x, t):
+        return self.F @ x + self.N
+
+    def variance(self, x, t):
+        return self.Q
+
+    def __call__(self, times, p0, toa_errors=None):
+        return self.integrate(times, p0=p0, toa_errors=toa_errors, nphase_states=1)
+
+
