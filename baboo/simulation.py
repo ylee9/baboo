@@ -45,15 +45,17 @@ def mean_reverting_velocity_acceration_model(times, v_start, a_start,
         list of frequencies evaluated at input times with measurement noise.
     """
     F = np.longdouble(np.array([[-gamma_v, 1], [0, -gamma_a]]))
-    N = np.longdoube(np.array([gamma_v*N, gamma_a*abar]))
+    N = np.longdouble(np.array([gamma_v*N, gamma_a*abar]))
+    # F = np.longdouble(np.array([[0, 1], [0, -gamma_a]]))
+    # N = np.longdouble(np.array([0, gamma_a*abar]))
     Sigma = np.longdouble(np.diag([sigma_v, sigma_a]))
     def f(x, t):
-        return F_int.dot(x) + N
+        return F.dot(x) + N
     def g(x, t):
-        return xi
+        return Sigma
     states = sdeint.itoint(f, g, np.array([v_start, a_start]), times)
     data = states.copy()
-    data[:, 0] += np.random.randn(times.size) * np.sqrt(R_c)
+    data[:, 0] += np.random.randn(times.size) * np.sqrt(R)
     return data[:, 0]
 
 
@@ -294,22 +296,22 @@ class TwoComponentModelSim(SimulationModel):
 class OneComponentModelSim(SimulationModel):
     """One component model simulation"""
     nstates = 3
-    def __init__(self, F2=0, Q_f=0,
-            Q_f1=None, Q_f2=0, skipsize=1000):
+    def __init__(self, F2=0, Q_phi=0,
+            Q_f0=None, Q_f1=0, skipsize=1000):
         super(OneComponentModelSim, self).__init__()
         self.F2 = F2
-        self.Q_f = Q_f
-        if Q_f1 is None:
+        self.Q_phi = Q_phi
+        if Q_f0 is None:
             raise ValueError('Must specify noise on frequency derivatives')
+        self.Q_f0 = Q_f0
         self.Q_f1 = Q_f1
-        self.Q_f2 = Q_f2
         self.skipsize=1000
 
         # set up matrices
-        # states are [crust phase, crust frequency, superfluid frequency]
+        # states are [crust phase, crust frequency, crust frequency derivative]
         self.F = np.longdouble(np.array([[0, 1, 0], [0, 0, 1], [0, 0, 0]]))
         self.N = np.longdouble(np.array([0, 0, self.F2]))
-        self.Q = np.longdouble(np.diag([np.sqrt(Q_f), np.sqrt(Q_f1), np.sqrt(Q_f2)]))
+        self.Q = np.longdouble(np.diag([np.sqrt(Q_phi), np.sqrt(Q_f0), np.sqrt(Q_f1)]))
 
     def expectation(self, x, t):
         return self.F @ x + self.N
@@ -356,8 +358,12 @@ class MeanRevertingModelSim(SimulationModel):
         # states are [phase, frequency, fdot, fddot]
         # also written as [phi, F0, v, a]
         self.F = np.longdouble(np.array([[0., 1., 0., 0.], [0., 0., 1., 0],
-            [0, 0, -self.gamma_v, 1], [0, 0, 0, -self.gamma_a]]))
+                                         [0, 0, -self.gamma_v, 1], [0, 0, 0, -self.gamma_a]]))
         self.N = np.longdouble(np.array([0., 0., self.gamma_v*self.Nv, self.gamma_a*self.abar]))
+        # self.F = np.longdouble(np.array([[0., 1., 0., 0.], [0., 0., 1., 0],
+        #                                  [0, 0, 0, 1], [0, 0, 0, -self.gamma_a]]))
+        # self.N = np.longdouble(np.array([0., 0., 0, self.gamma_a*self.abar]))
+
         self.Q = np.longdouble(np.diag([0., 0., self.sigma_v, self.sigma_a]))
 
     def expectation(self, x, t):

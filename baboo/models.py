@@ -10,6 +10,7 @@ List of Models:
 
     `SecondSpindownModel`: Include a second spindown and track frequency derivative.
 """
+# import numpy as np
 import numpy as np
 from .kalman import KalmanFilterTimeVarying, KalmanFilterTimeVaryingOneState
 import bilby
@@ -155,7 +156,7 @@ class TwoComponentModel(KalmanFilterTimeVarying):
         elif isinstance(params, np.ndarray):
             omgc_0 = self.data[0,0]
             omgs_0 = omgc_0 - lag
-        return self.smoother(self.data, params, x0=np.array([omgc_0, omgs_0]),
+        return self.run_smoother(self.data, params, x0=np.array([omgc_0, omgs_0]),
                                P0=np.eye(self.nstates) * np.max(self.R[:, :, 0])*1e5,
                                )
 
@@ -630,6 +631,135 @@ class MeanRevertingModel(KalmanFilterTimeVarying):
         torque[0, :] = N * (1 - exp_gamma_v) + \
                   (abar * ((1 - exp_gamma_v) * gamma_a - (1 - exp_gamma_a) *
                       gamma_v) / ((gamma_a - gamma_v) * gamma_v))
+        torque[1, :] = (1 - exp_gamma_a) * abar
+        self.B = torque
+
+    def loglike(self, params, loglikelihood_burn=1, return_states=False):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewha reasonable starting point for
+        # initial state. I dont' think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+        # try:
+        self.params = params.copy()
+        if isinstance(params, dict):
+            fdot_start = params['fdot_start']
+            fddot_start = params['fddot_start']
+        elif isinstance(params, np.ndarray):
+            fdot_start = self.data[0,0]
+            fddot_start = 0
+        return self.ll_on_data(self.data, params, x0=np.array([fdot_start, fddot_start]),
+                               P0=np.eye(self.nstates) * np.max(self.R[:, :, 0])*1e1,
+                               burn=loglikelihood_burn,
+                               return_states=return_states)
+#         except np.linalg.LinAlgError:
+#             return -np.inf
+    def smooth(self, params):
+        """
+        calculate log likelihood on data for a given set of parameters.
+
+        params is either a list or a dictionary that can be passed
+        to `self.param_map`.
+        """
+        # start at somewhat reasonable starting point for
+        # initial state. I don't think this is strictly correct.
+        # we should figure out how to properly start this with
+        # diffuse starting information
+        self.params = params.copy()
+        print(self.params)
+        if isinstance(params, dict):
+            fdot_start = params['fdot_start']
+            fddot_start = params['fddot_start']
+        elif isinstance(params, np.ndarray):
+            fdot_start = self.data[0,0]
+            fddot_start = 0
+        return self.run_smoother(self.data, params, x0=np.array([fdot_start, fddot_start]),
+                               P0=np.eye(self.nstates) * np.max(self.R[:, :, 0])*1e5,
+                               )
+
+class MeanRevertingModel2(KalmanFilterTimeVarying):
+    """
+    note that param map function can't contain dependence on dt
+    for this model.
+    """
+    def __init__(self, endog, measurement_cov=None,
+                 design=None, times=None, solve=True, params=None):
+        # transition, Q, and B matrices are set to None for
+        # now. They will be specified when parameters are given.
+        super(MeanRevertingModel2, self).__init__(None, design, None,
+              measurement_cov, None, solve)
+        if times is None:
+            raise ValueError("must specify variable dt")
+        self.times = times
+        self.data = endog
+        self.nobs = self.times.size
+        self.solve = solve
+        self._R = self.R.copy()
+        if params is None:
+            self.params = {'sigma_v': None, 'sigma_a': None,
+                           'N': None, 'abar': None, 'gamma_v': None,
+                           'gamma_a': None, 'EFAC': None, 'EQUAD': None}
+        else:
+            self.params = params
+
+    @property
+    def keylist(self):
+        return ['sigma_v', 'sigma_a', 'N', 'abar', 'gamma_v', 'gamma_a',
+         'EFAC', 'EQUAD', 'fdot_start', 'fddot_start']
+
+    def _check_params(self, params):
+        # print(list(params.keys()))
+        # if self.keylist != list(params.keys()):
+        #    raise ValueError(f"Incorrect set of parameters supplied. List of available parameters is {self.keylist}")
+        pass
+
+    @property
+    def dts(self):
+        return np.append(1, self.times[1:] - self.times[:-1])
+
+    def update_parameters(self, params):
+        self._check_params(params)
+        self.update_transition(params['gamma_v'], params['gamma_a'])
+        self.update_Q(params['sigma_v'], params['sigma_a'], params['gamma_v'],
+                params['gamma_a'])
+        self.update_torque(params['gamma_v'], params['gamma_a'], params['N'],
+                params['abar'])
+
+    def update_transition(self, gamma_v, gamma_a):
+        transition = np.zeros((2, 2, self.dts.size))
+        exp_gamma_a = np.exp(-gamma_a * self.dts)
+        transition[0, 0, :] = 1
+        transition[0, 1, :] = (1 - exp_gamma_a) / gamma_a
+        transition[1, 1, :] = exp_gamma_a
+        self.transition = transition
+
+    def update_Q(self, sigma_v, sigma_a, gamma_v, gamma_a):
+        Q = np.zeros((2, 2, self.dts.size))
+        exp_gamma_a = np.exp(-gamma_a * self.dts)
+        exp_gamma_v = np.exp(-gamma_v * self.dts)
+        gamma_tot = gamma_a + gamma_v
+        exp_gamma_tot = np.exp(-gamma_tot * self.dts)
+        siga2 =  sigma_a**2
+        sigv2 = sigma_v**2
+        Q[0, 0, :] = -(3 + exp_gamma_a**2 - 4 * exp_gamma_a - 2 * self.dts * gamma_a) * siga2 / (2 * gamma_a**3) + self.dts * sigv2
+        Q[1, 0, :] = (1 - 2*exp_gamma_a + exp_gamma_a**2) * siga2 / (2 * gamma_a**2)
+        Q[0, 1, :] = Q[1, 0, :]
+        Q[1, 1, :] = (1 - exp_gamma_a**2) * siga2 / (2 * gamma_a)
+        self.Q = Q
+
+    def update_torque(self, gamma_v, gamma_a, N, abar):
+        exp_gamma_a = np.exp(-gamma_a * self.dts)
+        exp_gamma_v = np.exp(-gamma_v * self.dts)
+        gamma_tot = gamma_a + gamma_v
+        exp_gamma_tot = np.exp(-gamma_tot * self.dts)
+
+        torque = np.zeros((2, self.dts.size))
+        torque[0, :] = abar * (self.dts + (exp_gamma_a - 1) / gamma_a)
         torque[1, :] = (1 - exp_gamma_a) * abar
         self.B = torque
 

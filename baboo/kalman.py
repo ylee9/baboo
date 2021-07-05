@@ -1,5 +1,7 @@
+# import numpy as np
 import numpy as np
-from numpy.linalg import inv, det, solve, cholesky,slogdet
+# from numpy.linalg import inv, det, solve, cholesky,slogdet
+from numpy.linalg import inv, det, solve, cholesky, slogdet
 from numba import jit
 from scipy.linalg import cho_solve
 
