@@ -9,7 +9,6 @@ from dynesty import utils as dyfunc
 from scipy.linalg import inv
 
 
-
 def construct_transition(dts):
     F = np.zeros((3, 3, dts.size))
     # \delta phi starts at zero, not at previous phi value for our case!
