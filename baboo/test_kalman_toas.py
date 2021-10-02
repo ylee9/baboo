@@ -2,6 +2,7 @@ import kalman_toas as kt
 import numpy as np
 import numpy.testing as npt
 
+
 DT_VAL = 1.123
 DTS = np.array([DT_VAL])
 FDOT = -1.2345e-10
