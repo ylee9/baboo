@@ -11,6 +11,7 @@ well.
 import numpy as np
 import bilby
 
+
 class KalmanLikelihoodSecondSpindownGN(bilby.Likelihood):
     """
     Likelihood class for Bilby.
@@ -31,26 +32,34 @@ class KalmanLikelihoodSecondSpindownGN(bilby.Likelihood):
         model (i.e. one of the
         """
         if parameters is None:
-            parameters={'Qgamma': None, 'N2':None, 'beta': None,'delta':None,
-                    'sigma':None, 'omg0':None, 'omgdot0': None,
-                    'EFAC':None, 'EQUAD':None}
+            parameters = {
+                "Qgamma": None,
+                "N2": None,
+                "beta": None,
+                "delta": None,
+                "sigma": None,
+                "omg0": None,
+                "omgdot0": None,
+                "EFAC": None,
+                "EQUAD": None,
+            }
         super().__init__(parameters=parameters)
         self.neutron_star_model = neutron_star_model
         self.x0 = x0
 
     def log_likelihood(self):
         try:
-            ll = self.neutron_star_model.loglike(self.parameters,
-                    loglikelihood_burn=1)
+            ll = self.neutron_star_model.loglike(self.parameters, loglikelihood_burn=1)
         # if we can't run the kalman filter
         # these parameters are not right...
         except np.linalg.LinAlgError:
-            ll= -np.inf
+            ll = -np.inf
         # check if it's a nan.
         # if so don't use these parameters
         if np.isnan(ll):
             ll = -np.inf
         return ll
+
 
 class KalmanLikelihoodSecondSpindown(bilby.Likelihood):
     """
@@ -72,25 +81,32 @@ class KalmanLikelihoodSecondSpindown(bilby.Likelihood):
         model (i.e. one of the
         """
         if parameters is None:
-            parameters={'Q1': None, 'Q2':None, 'N2': None, 'omg0':None, 'omgdot0': None,
-                    'EFAC':None, 'EQUAD':None}
+            parameters = {
+                "Q1": None,
+                "Q2": None,
+                "N2": None,
+                "omg0": None,
+                "omgdot0": None,
+                "EFAC": None,
+                "EQUAD": None,
+            }
         super().__init__(parameters=parameters)
         self.neutron_star_model = neutron_star_model
         self.x0 = x0
 
     def log_likelihood(self):
         try:
-            ll = self.neutron_star_model.loglike(self.parameters,
-                    loglikelihood_burn=1)
+            ll = self.neutron_star_model.loglike(self.parameters, loglikelihood_burn=1)
         # if we can't run the kalman filter
         # these parameters are not right...
         except np.linalg.LinAlgError:
-            ll= -np.inf
+            ll = -np.inf
         # check if it's a nan.
         # if so don't use these parameters
         if np.isnan(ll):
             ll = -np.inf
         return ll
+
 
 class KalmanLikelihoodOneComponent(bilby.Likelihood):
     """
@@ -112,26 +128,30 @@ class KalmanLikelihoodOneComponent(bilby.Likelihood):
         model (i.e. one of the
         """
         if parameters is None:
-            parameters={'sigma2': None, 'torque': None, 'omgc_0':None, 'EFAC':
-                    None,
-                    'EQUAD': None}
+            parameters = {
+                "sigma2": None,
+                "torque": None,
+                "omgc_0": None,
+                "EFAC": None,
+                "EQUAD": None,
+            }
         super().__init__(parameters=parameters)
         self.neutron_star_model = neutron_star_model
         self.x0 = x0
 
     def log_likelihood(self):
         try:
-            ll = self.neutron_star_model.loglike(self.parameters,
-                    loglikelihood_burn=1)
+            ll = self.neutron_star_model.loglike(self.parameters, loglikelihood_burn=1)
         # if we can't run the kalman filter
         # these parameters are not right...
         except np.linalg.LinAlgError:
-            ll= -np.inf
+            ll = -np.inf
         # check if it's a nan.
         # if so don't use these parameters
         if np.isnan(ll):
             ll = -np.inf
         return ll
+
 
 class KalmanLikelihood(bilby.Likelihood):
     """
@@ -153,30 +173,36 @@ class KalmanLikelihood(bilby.Likelihood):
         model (i.e. one of the
         """
         if parameters is None:
-            parameters={'relax_ratio': None,
-                        'reduced_relax': None,
-                        'Qc': None, 'Qs': None, 'lag': None,
-                        'omegac_dot': None, 'omgc_0':None,
-                        'omgs_0':None, 'EFAC': None,
-                        'EQUAD': None}
+            parameters = {
+                "relax_ratio": None,
+                "reduced_relax": None,
+                "Qc": None,
+                "Qs": None,
+                "lag": None,
+                "omegac_dot": None,
+                "omgc_0": None,
+                "omgs_0": None,
+                "EFAC": None,
+                "EQUAD": None,
+            }
         super().__init__(parameters=parameters)
         self.neutron_star_model = neutron_star_model
         self.x0 = x0
 
     def log_likelihood(self):
         try:
-            ll = self.neutron_star_model.loglike(self.parameters,
-                    loglikelihood_burn=1)
+            ll = self.neutron_star_model.loglike(self.parameters, loglikelihood_burn=1)
         # if we can't run the kalman filter
         # these parameters are not right...
         except np.linalg.LinAlgError:
-            ll= -np.inf
+            ll = -np.inf
         # check if it's a nan.
         # if so don't use these parameters
         if np.isnan(ll):
             ll = -np.inf
-#         print(ll)
+        #         print(ll)
         return ll
+
 
 class KalmanLikelihoodMeanReversion(bilby.Likelihood):
     """
@@ -198,26 +224,31 @@ class KalmanLikelihoodMeanReversion(bilby.Likelihood):
         model (i.e. one of the
         """
         if parameters is None:
-            parameters={'sigma_v': None, 'sigma_a':None, 'N': None,'abar':None,
-                    'gamma_v':None, 'gamma_a':None, 'fdot_start': None,
-                    'fddot_start': None,
-                    'EFAC':None, 'EQUAD':None}
+            parameters = {
+                "sigma_v": None,
+                "sigma_a": None,
+                "N": None,
+                "abar": None,
+                "gamma_v": None,
+                "gamma_a": None,
+                "fdot_start": None,
+                "fddot_start": None,
+                "EFAC": None,
+                "EQUAD": None,
+            }
         super().__init__(parameters=parameters)
         self.neutron_star_model = neutron_star_model
         self.x0 = x0
 
     def log_likelihood(self):
         try:
-            ll = self.neutron_star_model.loglike(self.parameters,
-                    loglikelihood_burn=1)
+            ll = self.neutron_star_model.loglike(self.parameters, loglikelihood_burn=1)
         # if we can't run the kalman filter
         # these parameters are not right...
         except np.linalg.LinAlgError:
-            ll= -np.inf
+            ll = -np.inf
         # check if it's a nan.
         # if so don't use these parameters
         if np.isnan(ll):
             ll = -np.inf
         return ll
-
-
