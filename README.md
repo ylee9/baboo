@@ -1,3 +1,7 @@
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://github.com/meyers-academic/baboo)
+[![Build Status](https://github.com/meyers-academic/baboo/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/meyers-academic/baboo/actions/workflows/CI.yml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/tomkimpson/RelativisticDynamics.jl/branch/main/graph/badge.svg?token=LpfCcTaxFQ)](https://codecov.io/gh/tomkimpson/RelativisticDynamics.jl)
+
 # baboo
 A python package for doing fast neutron star inference using kalman filtering. Named after a cat. Work described in **paper link**.
 
