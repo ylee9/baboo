@@ -7,7 +7,7 @@ import numpy as np
 from corner import corner
 from dynesty import utils as dyfunc
 from scipy.linalg import inv
-
+from numba import jit, njit
 
 def construct_transition(dts):
     F = np.zeros((3, 3, dts.size))
@@ -43,18 +43,27 @@ def construct_Q(dts, sig_fdot, sig_f, sig_p):
     Q[2, 2, :] = dts * sig_fdot ** 2
     return Q
 
-
+@njit(nopython=True, fastmath=True)
 def predict_phi_f_fdot(x, P, transition, torque, process_covariance, nstates):
+    # print(x.dtype)
+    # print(P.dtype)
+    # print(transition.dtype)
+    # print(torque.dtype)
+    # print(process_covariance.dtype)
     xp = transition @ x + torque
     Pp = transition @ P @ transition.T + process_covariance
     return xp, Pp
 
 
+@njit(nopython=True, fastmath=True)
 def update_phi_f_fdot(xp, Pp, dt_err, measurement_jac):
     innov = np.round(xp[0, 0]) - xp[0, 0]
     innov_covar = measurement_jac @ Pp @ measurement_jac.T + dt_err ** 2 * xp[1, 0] ** 2
+    # print(measurement_jac.shape)
+    # print((Pp @ measurement_jac.T).shape)
+    # print(innov_covar.shape)
 
-    gain = Pp @ measurement_jac.T / innov_covar
+    gain = (Pp @ measurement_jac.T) / innov_covar
     x = xp + gain * innov
     P = (np.eye(3) - gain @ measurement_jac) @ Pp
     ll = -0.5 * (np.log(innov_covar) + innov ** 2 / innov_covar + np.log(2 * np.pi))
@@ -64,7 +73,7 @@ def update_phi_f_fdot(xp, Pp, dt_err, measurement_jac):
 def run_filter_phi_f_fdot(
     toas, toa_errors, F0, F1, F2, sigp, sigf, sigf_dot, ll_burn=5, efac=1, equad=0
 ):
-    measurement_jac = np.array([1, 0, 0]).reshape((1, 3))
+    measurement_jac = np.array([1., 0, 0]).reshape((1, 3))
 
     # time deltas
     deltaTs = np.diff(toas) * 86400
@@ -94,6 +103,12 @@ def run_filter_phi_f_fdot(
     # For now we use these defaults
     P = np.diag([1e5 * deltaT_errors[0] ** 2 * F0 ** 2, 5 * F0 ** 2, 5 * F1 ** 2])
     for dt, dt_err in zip(deltaTs, deltaT_errors):
+        # print(x.dtype)
+        # print(P.dtype)
+        # print(transitions.dtype)
+        # print(torques.dtype)
+        # print(Qs.dtype)
+
         xp, pp = predict_phi_f_fdot(
             x, P, transitions[:, :, ii], torques[:, :, ii], Qs[:, :, ii], 2
         )
@@ -121,7 +136,7 @@ def run_filter_phi_f_fdot(
 def run_smoother_phi_f_fdot(
     toas, toa_errors, F0, F1, F2, sigp, sigf, sigf_dot, ll_burn=5, efac=1, equad=0
 ):
-    measurement_jac = np.array([1, 0, 0]).reshape((1, 3))
+    measurement_jac = np.array([1., 0, 0]).reshape((1, 3))
 
     # time deltas
     deltaTs = np.diff(toas) * 86400
@@ -197,14 +212,14 @@ def load_utmost_pulsar_and_sample(parfile, timfile, nlive=100, jname="Pulsar"):
 
     print(f"loading {jname} pulsar")
     pulsar = libstempo.tempopulsar(parfile=parfile, timfile=timfile)
-    F0 = (
+    F0 = float(
         pulsar["F0"].val
         + pulsar["F1"].val * (pulsar.toas()[0] - pulsar["PEPOCH"].val) * 86400
     )
-    F1 = pulsar["F1"].val
-    F2 = pulsar["F2"].val
+    F1 = float(pulsar["F1"].val)
+    F2 = float(pulsar["F2"].val)
     x_final, P_final, innovations, innovations_covars, ll = run_filter_phi_f_fdot(
-        pulsar.pets(), pulsar.toaerrs * 1e-6, F0, F1, F2, 0, 0, 0
+        pulsar.pets().astype(float), pulsar.toaerrs.astype(float) * 1e-6, float(F0), F1, F2, 0, 0, 0
     )
     param_mins = np.array(
         [
@@ -248,11 +263,11 @@ def load_utmost_pulsar_and_sample(parfile, timfile, nlive=100, jname="Pulsar"):
         pulsar["RAJ"].val = x[10]
         pulsar["DECJ"].val = x[11]
         _, _, _, _, ll = run_filter_phi_f_fdot(
-            pulsar.pets(),
-            pulsar.toaerrs * 1e-6,
-            x[0],
-            x[1],
-            x[2],
+            pulsar.pets().astype(float),
+            pulsar.toaerrs.astype(float) * 1e-6,
+            float(x[0]),
+            float(x[1]),
+            float(x[2]),
             10 ** x[3],
             10 ** x[4],
             10 ** x[5],
