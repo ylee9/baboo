@@ -37,7 +37,7 @@ def run(params):
     omgc_dot = newpsr['F1'].val + params.omgc_ddot * Textrap
     omgc_pepoch = newpsr['F0'].val
 
-    write_par(params.output_tag + '.par', newpsr['F0'].val,
+    write_par(params.output_tag, newpsr['F0'].val,
             newpsr['F1'].val, PEPOCH,
               F0err=1e-3, F1err=np.abs(omgc_dot/3))
 
@@ -46,8 +46,8 @@ def run(params):
     phi0 = random.random()
     p0 = np.asarray([phi0, omgc0, omgc_dot])
 
-    model_class = OneComponentModelSim(F2=params.omgc_ddot, Q_f=params.xi_phase**2, Q_f1=params.xi_freq**2)
-    toas, toa_errors, states = model_class(pets, p0, toa_errors)
+    model_class = OneComponentModelSim(F2=params.omgc_ddot, Q_f0=params.xi_phase**2, Q_f1=params.xi_freq**2)
+    toas, toa_errors, states, pn = model_class(pets, p0, toa_errors)
 
     # fit toas to get frequencies
     freqs_fit, freqs_errs_fit, times_fit = fit_toas_to_get_frequencies(toas,
@@ -76,7 +76,7 @@ def run(params):
     plt.close()
 
     # save tim file
-    write_tim_file(params.output_tag, toas, toa_errors)
+    write_tim_file(params.output_tag, toas, toa_errors, pn)
 
     # read in from libstempo, now with new tim file
     psr = libstempo.tempopulsar(parfile=params.par_file, timfile=params.output_tag + '.tim')
