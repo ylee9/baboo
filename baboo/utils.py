@@ -10,24 +10,28 @@ def write_freqs_fit_file(output_tag, freqs, freq_errs, times):
             print(f"{t} {freq} {fe}", file=myf)
     return np.asarray(freqs), np.asarray(freq_errs)
 
-def write_tim_file(output_tag, toas, toa_errors):
+def write_tim_file(output_tag, toas, toa_errors, pn=None, observatory="BAT"):
     """
     print out a fake .tim file
     """
     with open(output_tag + '.tim', 'w') as myf:
         print("FORMAT 1", file=myf)
         print("MODE 1", file=myf)
-        for toa, terr in zip(toas, toa_errors):
-            print(f"fake 1000 {toa} {terr*1e6} BAT", file=myf)
+        if pn is not None:
+            for toa, terr, pn in zip(toas, toa_errors, pn):
+                print(f"fake 1000 {toa} {terr*1e6} {observatory} -pn {pn}", file=myf)
+        else:
+            for toa, terr in zip(toas, toa_errors):
+                print(f"fake 1000 {toa} {terr*1e6} {observatory}", file=myf)
 
-def write_par(parfile, F0, F1, PEPOCH, F1err=1e-13, F0err=1e-7, fit_omgdot=True):
+def write_par(parfile, F0, F1, PEPOCH, F2=None, fit_F2=False, psrj="FAKE", F1err=1e-13, F0err=1e-7, fit_omgdot=True, raj="00:00", decj="00:00", fit_pos=False):
     """
     write out a fake par file
     """
     with open(parfile + ".par", 'w') as myf:
-        print(f"{'PSRJ':15}FAKE", file=myf)
-        print(f"{'RAJ':15}0", file=myf)
-        print(f"{'DECJ':15}0", file=myf)
+        print(f"{'PSRJ':15}{psrj}", file=myf)
+        print(f"{'RAJ':15} {raj} {1 if fit_pos else 0}", file=myf)
+        print(f"{'DECJ':15} {decj} {1 if fit_pos else 0}", file=myf)
         print(f"{'F0':15}{F0} 1  {F0err}", file=myf)
         if fit_omgdot:
             fit=1
@@ -35,6 +39,8 @@ def write_par(parfile, F0, F1, PEPOCH, F1err=1e-13, F0err=1e-7, fit_omgdot=True)
             fit=0
         if F1 is not None:
             print(f"{'F1':15}{F1:.10e} {fit} {F1err}", file=myf)
+        if F2 is not None:
+            print(f"{'F2':15}{F2:.10e} {int(fit_F2)}", file=myf)
         print(f"{'PEPOCH':15}{PEPOCH}", file=myf)
         print("TRACK -2", file=myf)
 
