@@ -174,9 +174,12 @@ class SimulationModel(object):
         previous_time = toa_fracs[0]
         toa_counter = 0
         states_vs_time[:, 0] = p0[nphase_states:]
+        pn_vs_time = [0]
         for ii in range(nphase_states):
             p0[ii] = 0. # must be zero at starting time because phase is zero here.
         p0 = np.longdouble(p0)
+        running_pn = 0
+        running_frac = 0.
         for next_tstart,terr in tqdm(zip(tstarts[1:], toa_errors[1:]), total=tstarts.size - 1):
             # start at last tao
             # move to observing time
@@ -194,6 +197,9 @@ class SimulationModel(object):
                     states = sdeint.itoint(self.expectation, self.variance, np.longdouble(p0), np.longdouble(times))
                     # reset start points
                     p0 = states[-1, :]
+                    elapsed_phase = p0[0] - states[0,0]
+                    running_pn += int(np.trunc(elapsed_phase))
+                    running_frac += elapsed_phase - np.floor(elapsed_phase)
                     # wrap phase
                     # raise ValueError('junk')
                     # print(p0)
@@ -215,6 +221,10 @@ class SimulationModel(object):
             toa = previous_time + xtra_time # + np.random.randn()*terr
             toa_fracs.append(toa - np.trunc(toa))
             toa_ints.append(np.trunc(toa))
+            pn_vs_time.append(pn_vs_time[-1] + np.int(np.floor(np.longdouble(running_pn) + running_frac + 1)))
+
+            running_pn = -1
+            running_frac = running_frac - np.floor(running_frac)
 
             # track other states
             states_vs_time[:, toa_counter + 1] = states_toa[-1, nphase_states:]
@@ -230,18 +240,26 @@ class SimulationModel(object):
         toas = np.longdouble(toa_ints / 86400) + np.longdouble(toa_fracs / 86400)
         # set start time
         toas += pets0
-        return toas, toa_errors, states_vs_time
+        return toas, toa_errors, states_vs_time, pn_vs_time
 
     def integrate_and_return_frequencies(self, tstarts, F0, F1, PEPOCH,
             toa_errors=None, p0=None, Ntoas_per_fit=3, nphase_states=1,
             tmpdir='./'):
         from .utils import fit_toas_to_get_frequencies
-        toas, toa_errors, states = self.integrate(tstarts,
+        toas, toa_errors, states, _ = self.integrate(tstarts,
                 toa_errors=toa_errors, p0=p0, nphase_states=nphase_states)
         freqs, freqs_errs, times_fit = fit_toas_to_get_frequencies(toas,
                 toa_errors, F0, F1, PEPOCH, Ntoas_per_fit=Ntoas_per_fit,
                 tmpdir=tmpdir)
         return toas, toa_errors, times_fit, freqs, freqs_errs, states
+
+    def integrate_and_return_pn(self, tstarts, F0, F1, PEPOCH,
+            toa_errors=None, p0=None, Ntoas_per_fit=3, nphase_states=1,
+            tmpdir='./'):
+        from .utils import fit_toas_to_get_frequencies
+        toas, toa_errors, states, pn = self.integrate(tstarts,
+                toa_errors=toa_errors, p0=p0, nphase_states=nphase_states)
+        return toas, toa_errors, states, pn
 
 
 class TwoComponentModelSim(SimulationModel):
@@ -312,6 +330,43 @@ class OneComponentModelSim(SimulationModel):
         self.F = np.longdouble(np.array([[0, 1, 0], [0, 0, 1], [0, 0, 0]]))
         self.N = np.longdouble(np.array([0, 0, self.F2]))
         self.Q = np.longdouble(np.diag([np.sqrt(Q_phi), np.sqrt(Q_f0), np.sqrt(Q_f1)]))
+
+    def expectation(self, x, t):
+        return self.F @ x + self.N
+
+    def variance(self, x, t):
+        return self.Q
+
+    def __call__(self, times, p0, toa_errors=None):
+        """
+        times : `numpy.ndarray`
+            List of times [mjd] at which to evaluate this.
+        p0 : `numpy.ndarray`
+            [initial phase, initial frequency, initial frequency derivative]
+        toa_errors : `numpy.ndarray`
+            Errors on output TOAs to give. Default = 1e-6 seconds.
+        """
+        return self.integrate(times, p0=p0, toa_errors=toa_errors)
+
+class OneComponentF2NoiseModelSim(SimulationModel):
+    """One component model simulation"""
+    nstates = 4
+    def __init__(self, Q_phi=0,
+            Q_f0=None, Q_f1=0, Q_f2=0, skipsize=1000):
+        super(OneComponentF2NoiseModelSim, self).__init__()
+        self.Q_phi = Q_phi
+        if Q_f0 is None:
+            raise ValueError('Must specify noise on frequency derivatives')
+        self.Q_f0 = Q_f0
+        self.Q_f1 = Q_f1
+        self.Q_f2 = Q_f2
+        self.skipsize=1000
+
+        # set up matrices
+        # states are [crust phase, crust frequency, crust frequency derivative]
+        self.F = np.longdouble(np.array([[0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0,0,0,0]]))
+        self.N = np.longdouble(np.array([0, 0, 0, 0]))
+        self.Q = np.longdouble(np.diag([np.sqrt(Q_phi), np.sqrt(Q_f0), np.sqrt(Q_f1), np.sqrt(Q_f2)]))
 
     def expectation(self, x, t):
         return self.F @ x + self.N
