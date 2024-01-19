@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+import tempfile
 
 def write_freqs_fit_file(output_tag, freqs, freq_errs, times):
     """

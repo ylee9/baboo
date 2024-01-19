@@ -6,8 +6,9 @@ import seaborn as sns
 import argparse
 import random
 from scipy.optimize import minimize
-from baboo.utils import fit_toas_to_get_frequencies, write_par, write_tim_file, write_freqs_fit_file
-from baboo.simulation import OneComponentModelSim
+from utils import fit_toas_to_get_frequencies, write_par, write_tim_file, write_freqs_fit_file
+from simulation import OneComponentModelSim
+import tempfile
 
 def run(params):
     libstempo_in_use = False
@@ -49,9 +50,10 @@ def run(params):
     model_class = OneComponentModelSim(F2=params.omgc_ddot, Q_f0=params.xi_phase**2, Q_f1=params.xi_freq**2)
     toas, toa_errors, states, pn = model_class(pets, p0, toa_errors)
 
+    tmpdir = tempfile.TemporaryDirectory()
     # fit toas to get frequencies
     freqs_fit, freqs_errs_fit, times_fit = fit_toas_to_get_frequencies(toas,
-            toa_errors, omgc0, omgc_dot, toas[0], Ntoas_per_fit=params.Ntoas_per_fit)
+            toa_errors, omgc0, omgc_dot, toas[0], Ntoas_per_fit=params.Ntoas_per_fit, tmpdir=tmpdir.name)
 
     # save file with fitted frequencies
     freqs, freq_errors = write_freqs_fit_file(params.output_tag,
@@ -79,13 +81,13 @@ def run(params):
     write_tim_file(params.output_tag, toas, toa_errors, pn)
 
     # read in from libstempo, now with new tim file
-    psr = libstempo.tempopulsar(parfile=params.par_file, timfile=params.output_tag + '.tim')
+    psr = libstempo.tempopulsar(parfile=params.output_tag + '.par', timfile=params.output_tag + '.tim')
     # fit
     psr.fit(iters=30)
     residuals = psr.residuals()
 
     # save output par
-    psr.savepar(params.output_tag + '.par')
+    #psr.savepar(params.output_tag + '.par')
 
     # get libstempo fit residuals
     plt.errorbar(toas, residuals * omgc0, yerr=toa_errors * omgc0, fmt='x', label='libstempo')
