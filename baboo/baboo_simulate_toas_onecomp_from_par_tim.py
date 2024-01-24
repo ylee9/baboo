@@ -29,23 +29,31 @@ def run(params):
     tstarts += 86400
     toa_errors = newpsr.toaerrs * 1e-6
     PEPOCH = newpsr['PEPOCH'].val
+
+    #start time of fake TOA
     pets0 = pets[0]
-    # set omega dot at start time
+    # time different between pets0 and PEPOCH
     Textrap = (pets0 - newpsr['PEPOCH'].val) * 86400
 
     # omega(t_0) = F(pepoch) + Fdot(pepoch) * (t_0 - PEPOCH) + Fddot(pepoch)*(t_0 - PEPOCH)^2 / 2.
-    omgc0 = newpsr['F0'].val + newpsr['F1'].val * Textrap + params.fdd * 0.5 * Textrap**2
-    omgc_dot = newpsr['F1'].val + params.fdd * Textrap
-    omgc_pepoch = newpsr['F0'].val
+
+    #Calculating states at time=pets0 given F0 and F1 at PEPOCH (taylor expansion)
+    # omgc0 = newpsr['F0'].val + newpsr['F1'].val * Textrap + params.fdd * 0.5 * Textrap**2
+    # omgc_dot = newpsr['F1'].val + params.fdd * Textrap
+    # omgc_pepoch = newpsr['F0'].val
+
+    f_pets0 = newpsr['F0'].val + newpsr['F1'].val * Textrap + params.fdd * 0.5 * Textrap**2
+    fdot_pets0 = newpsr['F1'].val + params.fdd * Textrap
+    fddot_pepoch = newpsr['F0'].val
 
     write_par(params.output_tag, newpsr['F0'].val,
             newpsr['F1'].val, PEPOCH, F2=params.fdd,
-              F0err=1e-3, F1err=np.abs(omgc_dot/3))
+              F0err=1e-3, F1err=np.abs(fdot_pets0/3))
 
     # values at start time
 
     phi0 = random.random()
-    p0 = np.asarray([phi0, omgc0, omgc_dot, params.fdd])
+    p0 = np.asarray([phi0, f_pets0, fdot_pets0, params.fdd])
 
     model_class = OneComponentF2NoiseModelSim(Q_phi=params.xi_phase**2, Q_f0=params.xi_freq**2, Q_f1=params.xi_fdot**2, Q_f2=params.xi_fddot**2)
     toas, toa_errors, states, pn = model_class(pets, p0, toa_errors)
@@ -53,7 +61,7 @@ def run(params):
     tmpdir = tempfile.TemporaryDirectory()
     # fit toas to get frequencies
     freqs_fit, freqs_errs_fit, times_fit = fit_toas_to_get_frequencies(toas,
-            toa_errors, omgc0, omgc_dot, toas[0], Ntoas_per_fit=params.Ntoas_per_fit, tmpdir=tmpdir.name)
+            toa_errors, f_pets0 , fdot_pets0 , toas[0], Ntoas_per_fit=params.Ntoas_per_fit, tmpdir=tmpdir.name)
 
     # save file with fitted frequencies
     freqs, freq_errors = write_freqs_fit_file(params.output_tag,
@@ -90,7 +98,7 @@ def run(params):
     psr.savepar(params.output_tag + '.par')
 
     # get libstempo fit residuals
-    plt.errorbar(toas, residuals * omgc0, yerr=toa_errors * omgc0, fmt='x', label='libstempo')
+    plt.errorbar(toas, residuals * f_pets0, yerr=toa_errors * f_pets0 , fmt='x', label='libstempo')
     plt.legend()
     plt.xlim(toas[0], toas[-1])
     plt.savefig(params.output_tag + 'residuals')
