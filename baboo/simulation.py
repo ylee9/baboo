@@ -147,6 +147,9 @@ class SimulationModel(object):
         """
         tstarts : `numpy.ndarray`
             list of MJD times
+        
+        nphase_states : int
+            number of phase states (which will not be tracked)
         """
         # error checking
         if p0 is None:
@@ -155,13 +158,15 @@ class SimulationModel(object):
         if toa_errors is None:
             logging.info('toa errors not set. auto setting to a microsecond')
             toa_errors = 1e-6 * np.ones(tstarts.size)
+
         if np.size(tstarts) != np.size(toa_errors):
             raise ValueError(f'toa size {tstarts.size} and toa error size {toa_errors.size} arrays must be the same length')
 
         # track first TOA
         pets0 = tstarts[0]
 
-        tstarts = np.round((tstarts - tstarts[0]) * 86400)
+        tstarts = np.round((tstarts - tstarts[0]) * 86400) #convert day - seconds
+    
         # reset to zero for integration
         # track states that are not the phase
         states_vs_time = np.zeros((np.size(p0) - nphase_states, tstarts.size))
@@ -170,7 +175,7 @@ class SimulationModel(object):
         prev_tstart = 0
         toa_fracs = [0]
         toa_ints = [0]
-        # p0 = np.asarray([phi0, omgc0, omgs0])
+        # p0 = np.asarray([phi0, f, fdot, (fddot)])
         previous_time = toa_fracs[0]
         toa_counter = 0
         states_vs_time[:, 0] = p0[nphase_states:]
@@ -186,30 +191,33 @@ class SimulationModel(object):
             # if next toa is at same time as current toa no need to integrate. we
             # just add a new one with different measurement noise.
             if not next_tstart == prev_tstart:
+                # do Ito integration for time segments of max_size=skipsize
                 times = np.arange(0, min(self.skipsize, next_tstart - previous_time), dtype=np.longdouble) + previous_time
                 counter = 0
                 while np.floor(next_tstart) - times[-1] >= 1:
+                    # increment times and keep doing Ito integration until we approach next TOA 
                     # if first time, don't increment times
                     if counter > 0:
-                        # add at most 10 seconds
+                        # add at most (skipsize) seconds
                         times = np.linspace(times[-1], times[-1] + min(self.skipsize, next_tstart - times[-1]), num=3)
                     counter += 1
+                    #dX = <X'>dt + GdW 
                     states = sdeint.itoint(self.expectation, self.variance, np.longdouble(p0), np.longdouble(times))
-                    # reset start points
+                    # reset initial states [phi, f, fdot, (fddot)] to calculate new states in next time segment
                     p0 = states[-1, :]
                     elapsed_phase = p0[0] - states[0,0]
                     running_pn += int(np.trunc(elapsed_phase))
                     running_frac += elapsed_phase - np.floor(elapsed_phase)
                     # wrap phase
                     # raise ValueError('junk')
-                    # print(p0)
+
                     for ii in range(nphase_states):
                         p0[ii] = p0[ii] - np.floor(p0[ii])
             else:
                 print('toas are close')
             previous_time = np.longdouble(times[-1])
 
-            # how far from next integer time are we?
+            # how far (in time) are we from next integer phase?
             xtra_time  = np.longdouble(1 - p0[0]) / np.longdouble(p0[1])
 
             # integrate twice as far as that in time.
@@ -217,6 +225,7 @@ class SimulationModel(object):
 
             # get states at time of TOA
             states_toa = sdeint.itoint(self.expectation, self.variance, p0, newtimes)
+
             # set TOA
             toa = previous_time + xtra_time # + np.random.randn()*terr
             toa_fracs.append(toa - np.trunc(toa))
@@ -226,10 +235,11 @@ class SimulationModel(object):
             running_pn = -1
             running_frac = running_frac - np.floor(running_frac)
 
-            # track other states
+            # track non-phase states
             states_vs_time[:, toa_counter + 1] = states_toa[-1, nphase_states:]
             prev_tstart = next_tstart
             toa_counter += 1
+
         toa_ints = np.asarray(toa_ints)
         toa_fracs = np.asarray(toa_fracs)
         toa_start = toa_ints[0]
@@ -331,7 +341,9 @@ class OneComponentModelSim(SimulationModel):
         self.N = np.longdouble(np.array([0, 0, self.F2]))
         self.Q = np.longdouble(np.diag([np.sqrt(Q_phi), np.sqrt(Q_f0), np.sqrt(Q_f1)]))
 
-    def expectation(self, x, t):
+    def expectation(self, x, t): 
+        #x and t included as argument by convention of the sdeint.itoint function?
+        #what do these terms mean?
         return self.F @ x + self.N
 
     def variance(self, x, t):
@@ -349,7 +361,7 @@ class OneComponentModelSim(SimulationModel):
         return self.integrate(times, p0=p0, toa_errors=toa_errors)
 
 class OneComponentF2NoiseModelSim(SimulationModel):
-    """One component model simulation"""
+    """One component model simulation, same as above except it includes fddot"""
     nstates = 4
     def __init__(self, Q_phi=0,
             Q_f0=None, Q_f1=0, Q_f2=0, skipsize=1000):
@@ -365,10 +377,10 @@ class OneComponentF2NoiseModelSim(SimulationModel):
         # set up matrices
         # states are [crust phase, crust frequency, crust frequency derivative]
         self.F = np.longdouble(np.array([[0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0,0,0,0]]))
-        self.N = np.longdouble(np.array([0, 0, 0, 0]))
+        self.N = np.longdouble(np.array([0, 0, 0, 0])) #Extra 'force'/'kick' terms om each state
         self.Q = np.longdouble(np.diag([np.sqrt(Q_phi), np.sqrt(Q_f0), np.sqrt(Q_f1), np.sqrt(Q_f2)]))
 
-    def expectation(self, x, t):
+    def expectation(self, x, t): #x = p0 i.e. the initial states
         return self.F @ x + self.N
 
     def variance(self, x, t):
