@@ -198,10 +198,10 @@ class SimulationModel(object):
                     # increment times and keep doing Ito integration until we approach next TOA 
                     # if first time, don't increment times
                     if counter > 0:
-                        # add at most (skipsize) seconds
+                        # add (at most) 'skipsize' seconds
                         times = np.linspace(times[-1], times[-1] + min(self.skipsize, next_tstart - times[-1]), num=3)
                     counter += 1
-                    #dX = <X'>dt + GdW 
+                    #dX = <expectation>dt + <variance>dW 
                     states = sdeint.itoint(self.expectation, self.variance, np.longdouble(p0), np.longdouble(times))
                     # reset initial states [phi, f, fdot, (fddot)] to calculate new states in next time segment
                     p0 = states[-1, :]
@@ -223,10 +223,10 @@ class SimulationModel(object):
             # integrate twice as far as that in time.
             newtimes = np.linspace(0, xtra_time, num=int(3))
 
-            # get states at time of TOA
+            # get states at TOA of the next integer phase
             states_toa = sdeint.itoint(self.expectation, self.variance, p0, newtimes)
 
-            # set TOA
+            # set TOA at next integer phase
             toa = previous_time + xtra_time # + np.random.randn()*terr
             toa_fracs.append(toa - np.trunc(toa))
             toa_ints.append(np.trunc(toa))
@@ -364,11 +364,11 @@ class OneComponentF2NoiseModelSim(SimulationModel):
     """One component model simulation, same as above except it includes fddot"""
     nstates = 4
     def __init__(self, Q_phi=0,
-            Q_f0=None, Q_f1=0, Q_f2=0, skipsize=1000):
+            Q_f0=0, Q_f1=None, Q_f2=0, skipsize=1000):
         super(OneComponentF2NoiseModelSim, self).__init__()
         self.Q_phi = Q_phi
-        if Q_f0 is None:
-            raise ValueError('Must specify noise on frequency derivatives')
+        if Q_f1 is None:
+            raise ValueError('Must specify noise on frequency derivative (default to HMM)')
         self.Q_f0 = Q_f0
         self.Q_f1 = Q_f1
         self.Q_f2 = Q_f2
